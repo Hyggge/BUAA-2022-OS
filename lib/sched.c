@@ -13,56 +13,43 @@
  */
 /*** exercise 3.15 ***/
 
-extern struct Env* curenv;
-extern struct Env_list env_sched_list[];
+extern struct Thread* curthread;
+extern struct Thread_list thread_sched_list[];
 
 
 void sched_yield(void)
 {
-//	printf("yield!!!\n");
-    static int count = 0; // remaining time slices of current env
-    static int point = 0; // current e:nv_sched_list index
-    
-    struct Env *e = curenv;
 
-    if (count == 0 || e == NULL || e->env_status != ENV_RUNNABLE) {
-       	if (e != NULL) {
-			LIST_REMOVE(e, env_sched_link);
-        	LIST_INSERT_TAIL(&env_sched_list[1-point], e, env_sched_link);
+    static int count = 0;
+    static int point = 0;
+    
+    struct Thread *t = curthread;
+
+    if (count == 0 || t == NULL || t->thread_status != THREAD_RUNNABLE) {
+       	if (t != NULL) {
+			LIST_REMOVE(t, thread_sched_link);
+        	LIST_INSERT_TAIL(&thread_sched_list[1-point], t, thread_sched_link);
         }
         while(1) {
-            if (LIST_EMPTY(&env_sched_list[point])) {
+            if (LIST_EMPTY(&thread_sched_list[point])) {
                 point = 1 - point;
             }
             
-            e = LIST_FIRST(&env_sched_list[point]);
+            t = LIST_FIRST(&thread_sched_list[point]);
 
-            if (e->env_status == ENV_RUNNABLE) {
+            if (t->thread_status == THREAD_RUNNABLE) {
                 break;
             } 
             else {
-                LIST_REMOVE(e, env_sched_link);
-                LIST_INSERT_TAIL(&env_sched_list[1-point], e, env_sched_link);
+                LIST_REMOVE(t, thread_sched_link);
+                LIST_INSERT_TAIL(&thread_sched_list[1-point], t, thread_sched_link);
             }
         }
-		count = e->env_pri;
+		count = t->thread_pri;
     }
-//	printf("%d going to run\n", e->env_id);
+
     count--;
-    env_run(e);
+    thread_run(t);
 
-
-    /*  hint:
-     *  1. if (count==0), insert `e` into `env_sched_list[1-point]`
-     *     using LIST_REMOVE and LIST_INSERT_TAIL.
-     *  2. if (env_sched_list[point] is empty), point = 1 - point;
-     *     then search through `env_sched_list[point]` for a runnable env `e`, 
-     *     and set count = e->env_pri
-     *  3. count--
-     *  4. env_run()
-     *
-     *  functions or macros below may be used (not all):
-     *  LIST_INSERT_TAIL, LIST_REMOVE, LIST_FIRST, LIST_EMPTY
-     */
 }
 

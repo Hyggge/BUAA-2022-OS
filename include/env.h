@@ -18,16 +18,67 @@
 #define ENV_RUNNABLE		1
 #define ENV_NOT_RUNNABLE	2
 
+// run status
+#define THREAD_FREE	            0
+#define THREAD_RUNNABLE		    1
+#define THREAD_NOT_RUNNABLE	    2
+
+// tags of thread
+#define THREAD_TAG_CANCELED    1
+#define THREAD_TAG_JOINED      2
+#define THREAD_TAG_EXITED      4
+#define THREAD_TAG_DETACHED    8
+
+// cancel type of  thread
+#define THREAD_CANCEL_DEFERRED  0
+#define THREAD_CANCEL_ASYNCHRONOUS	1
+
+// perms of semaphore
+#define SEM_PERM_VALID          1
+#define SEM_PERM_SHARE          2
+
+// 
+#define PTHREAD_CANCELED        666
+
+#define THREAD2INDEX(x)         ((x) & 31)
+#define THREAD2ENVID(x)         ((x) >> 5) 
+
+struct Thread {
+    u_int thread_id;
+    u_int thread_pri;
+    u_int thread_tag;
+    u_int thread_status;
+    struct Trapframe thread_tf;
+    LIST_ENTRY(Thread) thread_sched_link;
+
+    void* thread_retval;
+    void** thread_retval_ptr;
+
+    u_int thread_join_caller;
+
+	u_int thread_cancel_type;
+};
+
+struct Semaphore {
+    u_int sem_perm;
+    int sem_value;
+    u_int sem_queue_head;
+    u_int sem_queue_tail;
+    struct Thread* sem_wait_queue[32];
+};
+
 struct Env {
-	struct Trapframe env_tf;        // Saved registers
+	// struct Trapframe env_tf;        // Saved registers
 	LIST_ENTRY(Env) env_link;       // Free list
 	u_int env_id;                   // Unique environment identifier
 	u_int env_parent_id;            // env_id of this env's parent
-	u_int env_status;               // Status of the environment
+	// u_int env_status;               // Status of the environment
 	Pde  *env_pgdir;                // Kernel virtual address of page dir
 	u_int env_cr3;
+    u_int env_pri;
+	
 	LIST_ENTRY(Env) env_sched_link;
-        u_int env_pri;
+
 	// Lab 4 IPC
 	u_int env_ipc_value;            // data value sent to us 
 	u_int env_ipc_from;             // envid of the sender  
@@ -42,6 +93,12 @@ struct Env {
 	// Lab 6 scheduler counts
 	u_int env_runs;			// number of times been env_run'ed
 	u_int env_nop;                  // align to avoid mul instruction
+
+	// Lab 4 challenge
+	u_int env_thread_bitmap;
+	struct Thread env_threads[31];
+	u_int env_ipc_dst_thread;
+
 };
 
 LIST_HEAD(Env_list, Env);
@@ -59,6 +116,19 @@ void env_destroy(struct Env *e);
 int envid2env(u_int envid, struct Env **penv, int checkperm);
 void env_run(struct Env *e);
 
+/*challenge*/
+LIST_HEAD(Thread_list, Thread);
+// variable declaration
+extern struct Thread *curthread;
+extern struct Thread_list thread_sched_list[2];
+
+
+// function decleration
+int id2thread(u_int thread_id, struct Thread **pthread);
+int thread_alloc(struct Env *e, struct Thread **new);
+void thread_free(struct Thread *t);
+void thread_destroy(struct Thread *t);
+void thread_run(struct Thread *t);
 
 // for the grading script
 #define ENV_CREATE2(x, y) \

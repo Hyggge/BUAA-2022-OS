@@ -26,6 +26,7 @@ void user_lp_Print(void (*output)(void *, const char *, int),
 				   va_list ap);
 
 void writef(char *fmt, ...);
+void printf(char *fmt, ...);
 
 void _user_panic(const char *, int, const char *, ...)
 __attribute__((noreturn));
@@ -65,8 +66,40 @@ void syscall_panic(char *msg);
 int syscall_ipc_can_send(u_int envid, u_int value, u_int srcva, u_int perm);
 void syscall_ipc_recv(u_int dstva);
 int syscall_cgetc();
-int syscall_write_dev(u_int va, u_int dev, u_int len);
-int syscall_read_dev(u_int va, u_int dev, u_int len);
+
+// challenge!!!
+int syscall_thread_alloc();
+int syscall_thread_destroy(u_int threadid);
+int syscall_set_thread_status(u_int threadid, u_int status);
+int syscall_get_thread_id();
+int syscall_thread_join(u_int thread_id, void **retval_ptr);
+
+int syscall_sem_init (sem_t *sem, int pshared, unsigned int value);
+int syscall_sem_destroy (sem_t *sem);
+int syscall_sem_wait (sem_t *sem);
+int syscall_sem_trywait(sem_t *sem);
+int syscall_sem_post (sem_t *sem);
+int syscall_sem_getvalue (sem_t *sem, int *valp);
+
+int syscall_printf(char *fmt, va_list* ap_ptr);
+
+// pthread.c
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void * (*start_rountine)(void *), void *arg);
+void pthread_exit(void *retval);
+int pthread_cancel(pthread_t thread);
+int pthread_join(pthread_t thread, void **retval_ptr);
+void pthread_testcancel(void);
+pthread_t pthread_self(void);
+int pthread_detach(pthread_t thread);
+int pthread_setcanceltype(int type, int *oldtype);
+
+int sem_init (sem_t *sem, int pshared, unsigned int value);
+int sem_destroy (sem_t *sem);
+int sem_wait (sem_t *sem);
+int sem_trywait(sem_t *sem);
+int sem_post (sem_t *sem);
+int sem_getvalue (sem_t *sem, int *valp);
+
 // string.c
 int strlen(const char *s);
 char *strcpy(char *dst, const char *src);
@@ -122,7 +155,7 @@ int	stat(const char *path, struct Stat *);
 // file.c
 int	open(const char *path, int mode);
 int	read_map(int fd, u_int offset, void **blk);
-int	remove(const char *path);
+int	delete(const char *path);
 int	ftruncate(int fd, u_int size);
 int	sync(void);
 

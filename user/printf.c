@@ -33,6 +33,14 @@ void writef(char *fmt, ...)
 	va_end(ap);
 }
 
+void printf(char *fmt, ...)
+{
+	va_list ap;
+	va_start(ap, fmt);
+	syscall_printf(fmt, &ap);
+	va_end(ap);
+}
+
 void
 _user_panic(const char *file, int line, const char *fmt, ...)
 {

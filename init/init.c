@@ -13,15 +13,23 @@ void mips_init() {
 	page_init();
 
 	env_init();
+	
+ENV_CREATE(user_test7);
 
-	//ENV_CREATE(user_fktest);
-	//ENV_CREATE(user_pingpong);
-	ENV_CREATE(user_testpipe);
-	//ENV_CREATE(user_testpiperace);
-	//ENV_CREATE(user_testptelibrary);
-	//ENV_CREATE(user_icode);
-	ENV_CREATE(fs_serv);
- 
+	// ENV_CREATE(user_test1);
+	// ENV_CREATE(user_test2);
+	// ENV_CREATE(user_test3);
+	// ENV_CREATE(user_test4);
+	// ENV_CREATE(user_test5);
+	// ENV_CREATE(user_test6);
+	// ENV_CREATE(user_test7);
+	
+	// ENV_CREATE(user_thread_test);
+	//	ENV_CREATE(user_mytest1);
+	//	ENV_CREATE(user_mytest2);
+	//	 ENV_CREATE(user_fktest);
+	// ENV_CREATE(user_pingpong);
+
 	trap_init();
 	kclock_init();
 
@@ -62,3 +70,4 @@ void bzero(void *b, size_t len) {
 		*(char *)b++ = 0;
 	}
 }
+

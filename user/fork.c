@@ -183,7 +183,7 @@ fork(void)
 	u_int newenvid;
 	extern struct Env *envs;
 	extern struct Env *env;
-	u_int i, j;
+	u_int i;
 	int ret;
 
 	set_pgfault_handler(pgfault);
@@ -198,16 +198,14 @@ fork(void)
 
 	//if curenv is the father
 	else {
-    	for (i = 0; i < USTACKTOP; i += PDMAP) {
-        	if ((*vpd)[PDX(i)]) {
-            	for (j = 0; j < PDMAP && i + j < USTACKTOP; j += BY2PG) {
-                	if ((*vpt)[VPN(i + j)]) {
-                   		duppage(newenvid, VPN(i + j));
-					}
-            	}
-        	}
-    	}	
-	
+		for (i = 0; i < USTACKTOP; i += BY2PG) {
+			u_int pd_perm = ((Pde*)(*vpd))[i >> PDSHIFT] & 0xfff;
+			u_int pt_perm = ((Pte*)(*vpt))[i >> PGSHIFT] & 0xfff;
+			if ((pt_perm & PTE_V) && (pd_perm & PTE_V)) {
+				duppage(newenvid, VPN(i));
+			}
+		}
+
 		ret = syscall_mem_alloc(newenvid, UXSTACKTOP - BY2PG, PTE_V | PTE_R); 
 		if (ret < 0) {
 			user_panic("In fork: MEMORY ALLOC FAILED!");

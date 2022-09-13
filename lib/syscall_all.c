@@ -20,6 +20,14 @@ void sys_putchar(int sysno, int c, int a2, int a3, int a4, int a5)
 	return ;
 }
 
+
+extern void lp_Print(void (*output)(void *, char *, int), void * arg, char *fmt, va_list ap);
+extern void myoutput(void *arg, char *s, int l);
+void sys_printf(int sysno, char *fmt, va_list* ap_ptr) 
+{
+	lp_Print(myoutput, 0, fmt, *ap_ptr);
+}
+
 /* Overview:
  * 	This function enables you to copy content of `srcaddr` to `destaddr`.
  *
@@ -98,7 +106,7 @@ int sys_env_destroy(int sysno, u_int envid)
 		return r;
 	}
 
-	printf("[%08x] destroying %08x\n", curenv->env_id, e->env_id);
+	printf("[env %d] is destroying env %d\n", curenv->env_id, e->env_id);
 	env_destroy(e);
 	return 0;
 }
@@ -296,16 +304,20 @@ int sys_env_alloc(void)
 	// Your code here.
 	int ret;
 	struct Env *e;
-	
+	struct Thread *t;
+
 	ret = env_alloc(&e, curenv->env_id);
 	if (ret < 0) return ret;
-	
-	bcopy((void *)KERNEL_SP - sizeof(struct Trapframe), (void *)&(e->env_tf), sizeof(struct Trapframe));
 
-	e->env_tf.pc = e->env_tf.cp0_epc;
-	e->env_tf.regs[2] = 0;
-	e->env_status = ENV_NOT_RUNNABLE;
 	e->env_pri = curenv->env_pri;
+
+	ret = thread_alloc(e, &t);
+	if (ret < 0) return ret;
+
+	bcopy((void *)KERNEL_SP - sizeof(struct Trapframe), (void *)&(e->env_threads[0].thread_tf), sizeof(struct Trapframe));
+	e->env_threads[0].thread_tf.pc = e->env_threads[0].thread_tf.cp0_epc;
+	e->env_threads[0].thread_tf.regs[2] = 0;
+	e->env_threads[0].thread_status = THREAD_NOT_RUNNABLE;
 
 	return e->env_id;
 	//	panic("sys_env_alloc not implemented");
@@ -326,28 +338,28 @@ int sys_env_alloc(void)
 /*** exercise 4.14 ***/
 int sys_set_env_status(int sysno, u_int envid, u_int status)
 {
-	// Your code here.
-	struct Env *env;
-	int ret;
+	// // Your code here.
+	// struct Env *env;
+	// int ret;
 	
-	if (status != ENV_RUNNABLE && status != ENV_FREE && status != ENV_NOT_RUNNABLE) {
-		return -E_INVAL;
-	}
+	// if (status != ENV_RUNNABLE && status != ENV_FREE && status != ENV_NOT_RUNNABLE) {
+	// 	return -E_INVAL;
+	// }
 
-	ret = envid2env(envid, &env, 0);
-	if (ret < 0) return ret;
+	// ret = envid2env(envid, &env, 0);
+	// if (ret < 0) return ret;
 
 
-	if (status == ENV_RUNNABLE && env->env_status != ENV_RUNNABLE) {
-		LIST_INSERT_HEAD(&env_sched_list[0], env, env_sched_link);
-	}
-	if (status != ENV_RUNNABLE && env->env_status == ENV_RUNNABLE) {
-		LIST_REMOVE(env, env_sched_link);
-	}
+	// if (status == ENV_RUNNABLE && env->env_status != ENV_RUNNABLE) {
+	// 	LIST_INSERT_HEAD(&env_sched_list[0], env, env_sched_link);
+	// }
+	// if (status != ENV_RUNNABLE && env->env_status == ENV_RUNNABLE) {
+	// 	LIST_REMOVE(env, env_sched_link);
+	// }
 
-	env->env_status = status;
+	// // env->env_status = status;
 	return 0;
-	//	panic("sys_env_set_status not implemented");
+	// //	panic("sys_env_set_status not implemented");
 }
 
 /* Overview:
@@ -403,7 +415,8 @@ void sys_ipc_recv(int sysno, u_int dstva)
 
 	curenv->env_ipc_recving = 1;
 	curenv->env_ipc_dstva = dstva;
-	curenv->env_status = ENV_NOT_RUNNABLE;
+	curenv->env_ipc_dst_thread = curthread->thread_id;
+	curthread->thread_status = THREAD_NOT_RUNNABLE;
 	sys_yield();
 }
 
@@ -432,6 +445,7 @@ int sys_ipc_can_send(int sysno, u_int envid, u_int value, u_int srcva,
 	int ret;
 	struct Env *e;
 	struct Page *p;
+	struct Thread *t;
 
 	if (srcva >= UTOP) return -E_INVAL;
 
@@ -444,86 +458,230 @@ int sys_ipc_can_send(int sysno, u_int envid, u_int value, u_int srcva,
 	e->env_ipc_from = curenv->env_id;
 	e->env_ipc_value = value;
 	e->env_ipc_perm = perm;
-	e->env_status = ENV_RUNNABLE;
+
+	t = &e->env_threads[THREAD2INDEX(e->env_ipc_dst_thread)];
+	t->thread_status = THREAD_RUNNABLE;
 
 	u_int dstva = e->env_ipc_dstva;
 
 	if (srcva != 0) {
 		p = page_lookup(curenv->env_pgdir, srcva, NULL);
 		if (p == NULL) return -E_INVAL;
-		
 		page_insert(e->env_pgdir, p, dstva, perm);
 	}
 
 	return 0;
 }
-/* Overview:
- * 	This function is used to write data to device, which is
- * 	represented by its mapped physical address.
- *	Remember to check the validity of device address (see Hint below);
- * 
- * Pre-Condition:
- *      'va' is the starting address of source data, 'len' is the
- *      length of data (in bytes), 'dev' is the physical address of
- *      the device
- * 	
- * Post-Condition:
- *      copy data from 'va' to 'dev' with length 'len'
- *      Return 0 on success.
- *	Return -E_INVAL on address error.
- *      
- * Hint: Use ummapped segment in kernel address space to perform MMIO.
- *	 Physical device address:
- *	* ---------------------------------*
- *	|   device   | start addr | length |
- *	* -----------+------------+--------*
- *	|  console   | 0x10000000 | 0x20   |
- *	|    IDE     | 0x13000000 | 0x4200 |
- *	|    rtc     | 0x15000000 | 0x200  |
- *	* ---------------------------------*
- */
- /*** exercise 5.1 ***/
-int sys_write_dev(int sysno, u_int va, u_int dev, u_int len)
-{
-    // Your code here
-	if (va >= ULIM) {
+
+// pthread
+int sys_thread_alloc(int sysno) {
+	int ret;
+	struct Thread *t;
+
+	ret = thread_alloc(curenv, &t);
+	if (ret < 0) return ret;
+
+	t->thread_tf.pc = t->thread_tf.cp0_epc;	
+	t->thread_tf.regs[2] = 0;
+	t->thread_status = THREAD_NOT_RUNNABLE;
+
+	return t->thread_id;
+}
+
+
+int sys_thread_destroy(int sysno, u_int threadid) {
+	int ret;
+	struct Thread *t;
+
+	ret = id2thread(threadid, &t);
+	if (ret < 0) return ret;
+
+	if (t->thread_status == THREAD_FREE) {
 		return -E_INVAL;
 	}
 
-	if (!(dev >= 0x10000000 && dev + len - 1< 0x10000020) &&
-			!(dev >= 0x13000000 && dev + len - 1 < 0x13004200) &&
-			!(dev >= 0x15000000 && dev + len - 1 < 0x15000200)) {
-		return -E_INVAL;
-	}
-	bcopy(va, dev + 0xa0000000, len);
+	if ((t->thread_tag & THREAD_TAG_JOINED) != 0) {
+		u_int caller_id = t->thread_join_caller;
+		struct Thread * caller = &curenv->env_threads[THREAD2INDEX(caller_id)];
+		t->thread_tag &= ~THREAD_TAG_JOINED;
+		if (caller->thread_retval_ptr != NULL) {
+			*(caller->thread_retval_ptr) = t->thread_retval;
+			//printf("caller is %d, retval_ptr is %d", caller_id, t->thread_retval);
+		}
+		caller->thread_status = THREAD_RUNNABLE;
+		// LIST_INSERT_HEAD(&thread_sched_list[0], caller, thread_sched_link);
+	}  
+
+//	printf("[thread %d] destroying thread %d\n", curthread->thread_id, t->thread_id);
+	thread_destroy(t);
 	return 0;
 }
 
-/* Overview:
- * 	This function is used to read data from device, which is
- * 	represented by its mapped physical address.
- *	Remember to check the validity of device address (same as sys_write_dev)
- * 
- * Pre-Condition:
- *      'va' is the starting address of data buffer, 'len' is the
- *      length of data (in bytes), 'dev' is the physical address of
- *      the device
- * 
- * Post-Condition:
- *      copy data from 'dev' to 'va' with length 'len'
- *      Return 0 on success, < 0 on error
- *      
- * Hint: Use ummapped segment in kernel address space to perform MMIO.
- */
- /*** exercise 5.1 ***/
-int sys_read_dev(int sysno, u_int va, u_int dev, u_int len)
-{
-    // Your code here
-	if (!(dev >= 0x10000000 && dev + len - 1 < 0x10000020) &&
-			!(dev >= 0x13000000 && dev + len - 1 < 0x13004200) &&
-			!(dev >= 0x15000000 && dev + len - 1 < 0x15000200)) {
+int sys_set_thread_status(int sysno, u_int threadid, u_int status) {
+	int ret;
+	struct Thread *t;
+
+	if (status != THREAD_RUNNABLE && status != THREAD_FREE && status != THREAD_NOT_RUNNABLE) {
 		return -E_INVAL;
 	}
-	bcopy(dev + 0xa0000000, va, len);
+
+	ret = id2thread(threadid, &t);
+	if (ret < 0) return ret;
+
+	if (status == THREAD_RUNNABLE && t->thread_status != THREAD_RUNNABLE) {
+		LIST_INSERT_HEAD(&thread_sched_list[0], t, thread_sched_link);
+	}
+
+	if (status != THREAD_RUNNABLE && t->thread_status == THREAD_RUNNABLE) {
+		LIST_REMOVE(t, thread_sched_link);
+	}
+
+	t->thread_status = status;
+	return 0;
+}
+
+int sys_get_thread_id(int sysno) {
+	return curthread->thread_id;
+}
+
+int sys_thread_join(int sysno, u_int thread_id, void **retval_ptr) {
+	struct Thread *dst;
+	int ret = id2thread(thread_id, &dst);
+	if (ret < 0) return ret; 
+
+	if (dst->thread_id != thread_id) {
+        return -E_THREAD_NOT_FOUND;
+    } 
+    else if ((dst->thread_tag & THREAD_TAG_DETACHED) != 0) {
+        return -E_THREAD_DETACHED;
+    }
+    else if ((dst->thread_tag & THREAD_TAG_JOINED) != 0) {
+        return -E_THREAD_JOINED;
+    }
+
+	if (dst->thread_status == THREAD_FREE) {
+//		printf("%d enter pthread_join, dst is %d, dst''s status is %d\n", curthread->thread_id, dst->thread_id, dst->thread_status);
+        if (retval_ptr != NULL)
+			*retval_ptr = dst->thread_retval;
+       	return 0;
+    }
+
+ 	dst->thread_tag |= THREAD_TAG_JOINED;
+    dst->thread_join_caller = curthread->thread_id;
+// syscall_set_thread_status(0, THREAD_NOT_RUNNABLE);
+    curthread->thread_retval_ptr = retval_ptr;
+    curthread->thread_status = THREAD_NOT_RUNNABLE;
+
+	struct Trapframe *tf = (struct Trapframe *)(KERNEL_SP - sizeof(struct Trapframe));
+	tf->regs[2] = 0;
+    sys_yield();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+// semaphore 
+int sys_sem_init (int sysno, sem_t *sem, int pshared, unsigned int value) {
+	int i;
+
+    if (sem == NULL) {
+		return -E_SEM_NOT_FOUND;
+	}
+
+	sem->sem_value = value;
+	sem->sem_queue_head = 0; 
+	sem->sem_queue_tail = 0;
+	sem->sem_perm |= SEM_PERM_VALID;
+
+	if (pshared) {
+		sem->sem_perm |= SEM_PERM_SHARE;
+	}
+
+	for (i = 0; i < 32; i++) {
+		sem->sem_wait_queue[i] = NULL;
+	}
+	return 0;
+}
+
+int sys_sem_destroy (int sysno, sem_t *sem) {
+	if ((sem->sem_perm & SEM_PERM_VALID) == 0) {
+		return -E_SEM_INVALID;
+	}
+	if (sem->sem_queue_head != sem->sem_queue_tail) {
+		return -E_SEM_DESTROY_FAIL;
+	}
+	sem->sem_perm &= ~SEM_PERM_VALID;
+	return 0;
+}
+
+int sys_sem_wait (int sysno, sem_t *sem) {
+	if ((sem->sem_perm & SEM_PERM_VALID) == 0) {
+		return -E_SEM_INVALID;
+	}
+	
+	sem->sem_value--;
+	if (sem->sem_value >= 0) {
+		return 0;
+	}
+
+	// if sem_value < 0 
+	if (sem->sem_value < -32) {
+		return -E_SEM_WAIT_MAX;
+	}
+
+	// must wait
+	sem->sem_wait_queue[sem->sem_queue_tail] = curthread;
+	sem->sem_queue_tail = (sem->sem_queue_tail + 1)	% 32;
+
+	curthread->thread_status = THREAD_NOT_RUNNABLE;
+	struct Trapframe *tf = (struct Trapframe *)(KERNEL_SP - sizeof(struct Trapframe));
+	tf->regs[2] = 0;
+	sys_yield();
+}
+
+int sys_sem_trywait(int sysno, sem_t *sem) {
+	if ((sem->sem_perm & SEM_PERM_VALID) == 0) {
+		return -E_SEM_INVALID;
+	}
+	
+	sem->sem_value--;
+	if (sem->sem_value >= 0) {
+		return 0;
+	}
+	return -E_SEM_TRYWAIT_FAIL;
+}
+
+int sys_sem_post (int sysno, sem_t *sem) {
+	struct Thread *t;
+
+	if ((sem->sem_perm & SEM_PERM_VALID) == 0) {
+		return -E_SEM_INVALID;
+	}
+	
+	sem->sem_value++; 
+	if (sem->sem_value <= 0) {
+		t = sem->sem_wait_queue[sem->sem_queue_head];
+		sem->sem_queue_head = (sem->sem_queue_head + 1) % 32;
+		t->thread_status = THREAD_RUNNABLE;
+	}
+	return 0;
+}
+
+int sys_sem_getvalue (int sysno, sem_t *sem, int *valp) {
+	if ((sem->sem_perm & SEM_PERM_VALID) == 0) {
+		return -E_SEM_INVALID;
+	}
+	if (valp) {
+		*valp = sem->sem_value;
+	}
 	return 0;
 }

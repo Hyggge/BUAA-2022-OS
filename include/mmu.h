@@ -122,7 +122,20 @@
 #define E_FILE_EXISTS	11	// File already exists
 #define E_NOT_EXEC	12	// File not a valid executable
 
-#define MAXERROR 12
+#define E_BAD_THREAD            13
+#define E_THREAD_NOT_FOUND      14
+#define E_THREAD_DETACHED       15
+#define E_THREAD_CANCELED       16
+#define E_THREAD_JOINED       	17
+#define E_THREAD_EXITED			18
+
+#define E_SEM_NOT_FOUND			19
+#define E_SEM_TRYWAIT_FAIL		20	
+#define E_SEM_INVALID			21	
+#define E_SEM_DESTROY_FAIL		22
+#define E_SEM_WAIT_MAX			23
+
+#define MAXERROR 23
 
 #ifndef __ASSEMBLER__
 

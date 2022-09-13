@@ -88,12 +88,55 @@ syscall_cgetc()
 	return msyscall(SYS_cgetc, 0, 0, 0, 0, 0);
 }
 
-int syscall_write_dev(u_int va, u_int dev, u_int len) 
-{
-	return msyscall(SYS_write_dev, va, dev, len, 0, 0);
+// challenge!!!
+
+//pthread
+int syscall_thread_alloc() {
+	return msyscall(SYS_thread_alloc, 0, 0, 0, 0, 0);
 }
 
-int syscall_read_dev(u_int va, u_int dev, u_int len) 
-{
-	return msyscall(SYS_read_dev, va, dev, len, 0, 0);
+int syscall_thread_destroy(u_int threadid) {
+	return msyscall(SYS_thread_destroy, threadid, 0, 0, 0, 0);
+}
+
+int syscall_set_thread_status(u_int threadid, u_int status) {
+	return msyscall(SYS_set_thread_status, threadid, status, 0, 0, 0);
+}
+
+int syscall_get_thread_id() {
+	return msyscall(SYS_get_thread_id, 0, 0, 0, 0, 0);
+}
+
+// semaphore
+int syscall_sem_init(sem_t *sem, int pshared, unsigned int value) {
+	return msyscall(SYS_sem_init, sem, pshared, value, 0, 0);
+}
+
+int syscall_sem_destroy (sem_t *sem) {
+	return msyscall(SYS_sem_destroy, sem, 0, 0, 0, 0);
+}
+
+int syscall_sem_wait (sem_t *sem) {
+	return msyscall(SYS_sem_wait, sem, 0, 0, 0, 0);
+}
+
+int syscall_sem_trywait(sem_t *sem) {
+	return msyscall(SYS_sem_trywait, sem, 0, 0, 0, 0);
+}
+
+int syscall_sem_post (sem_t *sem) {
+	return msyscall(SYS_sem_post, sem, 0, 0, 0, 0);
+}
+
+int syscall_sem_getvalue (sem_t *sem, int *valp) {
+	return msyscall(SYS_sem_getvalue, sem, valp, 0, 0, 0);
+}
+
+
+int syscall_thread_join(u_int thread_id, void **retval_ptr) {
+	return msyscall(SYS_thread_join, thread_id, retval_ptr, 0, 0, 0);
+}
+
+int syscall_printf(char *fmt, va_list* ap_ptr) {
+	return msyscall(SYS_printf, fmt, ap_ptr, 0, 0, 0);
 }

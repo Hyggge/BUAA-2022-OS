@@ -19,7 +19,7 @@ void printcharc(char ch);
 
 void halt(void);
 
-static void myoutput(void *arg, char *s, int l)
+void myoutput(void *arg, char *s, int l)
 {
     int i;
 
